@@ -1,0 +1,451 @@
+<<: !include build_info.yaml
+
+esphome:
+  name: f1_clock
+
+  on_boot:
+    priority: -10
+    then:
+      - light.turn_on:
+          id: f1_strip
+          effect: f1_live
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  reboot_timeout: 0s
+
+ota:
+  - platform: http_request
+    id: http_ota
+        
+wifi:
+  reboot_timeout: 0s
+
+  ap:
+    ssid: "F1Clock"
+    password: "12345678"
+
+  on_connect:
+    then:
+      - lambda: |-
+          id(wifi_ok) = true;
+
+captive_portal:
+
+esp32_improv:
+  authorizer: none
+
+web_server:
+  port: 80
+  version: 3
+
+http_request:
+
+mqtt:
+  broker: gelden.ddns.net
+  port: 2105
+  username: f1reader
+  password: f1reader
+  discovery: false
+  reboot_timeout: 0s
+  keepalive: 15s
+  log_topic: none
+
+  on_connect:
+    then:
+      - lambda: |-
+          id(mqtt_ok) = true;
+      - script.execute: try_startup
+
+  on_message:
+    - topic: f1/f1_track_status/state
+      qos: 0
+      then:
+        - lambda: |-
+            id(track_state) = x.c_str();
+            std::transform(id(track_state).begin(), id(track_state).end(), id(track_state).begin(), ::toupper);
+
+            // Forceer terug naar f1_live, behalve tijdens OTA
+            if (!id(ota_in_progress) && !id(startup_active)) {
+                id(f1_strip).turn_on().set_effect("f1_live").perform();
+            }
+
+    - topic: f1/f1_race_week/state
+      qos: 0
+      then:
+        - lambda: |-
+            std::string s = x.c_str();
+            std::transform(s.begin(), s.end(), s.begin(), ::toupper);
+            id(raceweek_state) = (s == "ON");
+
+            // Forceer terug naar f1_live, behalve tijdens OTA
+            if (!id(ota_in_progress) && !id(startup_active)) {
+                id(f1_strip).turn_on().set_effect("f1_live").perform();
+            }
+
+    - topic: f1/firmware/latest-clock
+      qos: 0
+      then:
+        - lambda: |-
+            id(latest_firmware_sensor).publish_state(x.c_str());
+
+    - topic: f1/firmware/url-clock
+      qos: 0
+      then:
+        - lambda: |-
+            id(firmware_url) = x.c_str();
+            ESP_LOGI("ota", "Firmware URL updated to: %s", id(firmware_url).c_str());
+
+
+globals:
+  - id: track_state
+    type: std::string
+    initial_value: '"UNAVAILABLE"'
+    restore_value: false
+
+  - id: raceweek_state
+    type: bool
+    initial_value: "false"
+    restore_value: false
+
+  - id: startup_done
+    type: bool
+    initial_value: "false"
+    restore_value: false
+
+  - id: wifi_ok
+    type: bool
+    initial_value: "false"
+
+  - id: mqtt_ok
+    type: bool
+    initial_value: "false"
+
+  - id: firmware_version_global
+    type: std::string
+    initial_value: "\"${firmware_version}\""
+  
+  - id: firmware_url
+    type: std::string
+    initial_value: ""
+    restore_value: False
+
+  - id: ota_in_progress
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: startup_active
+    type: bool
+    restore_value: no
+    initial_value: "true"
+
+text_sensor:
+  - platform: template
+    name: "Installed Firmware Version"
+    id: firmware_version_sensor
+    icon: "mdi:chip"
+    lambda: |-
+      return id(firmware_version_global);
+    update_interval: 1h
+
+  - platform: template
+    name: "Latest Firmware Version"
+    id: latest_firmware_sensor
+    icon: "mdi:update"
+    update_interval: 5s
+
+binary_sensor:
+  - platform: template
+    name: "Firmware Update Available"
+    id: update_available
+    device_class: update
+    lambda: |-
+      if (id(latest_firmware_sensor).state.empty()) return false;
+      return id(latest_firmware_sensor).state != id(firmware_version_global);
+      
+script:
+  - id: try_startup
+    mode: queued
+    then:
+      - lambda: |-
+          if (id(startup_done)) return;
+          if (!id(wifi_ok) || !id(mqtt_ok)) return;
+      - light.turn_on:
+          id: f1_strip
+          effect: startup_lightsout
+  - id: do_ota
+    then:
+      - lambda: |-
+          id(ota_in_progress) = true;   // ⭐ Eerst OTA-flag zetten
+
+      - light.turn_on:                  
+          id: f1_strip
+          effect: "OTA_BLUE_GLOW"
+      
+      - delay: 4s                       
+      
+      - logger.log: "OTA gestart via HTTP..."
+
+      - ota.http_request.flash:
+          url: "https://raw.githubusercontent.com/egelden/f1-clock/main/build/f1-clock-OTA.bin"
+          md5_url: "https://raw.githubusercontent.com/egelden/f1-clock/main/build/f1-clock-OTA.bin.md5"
+
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          // 0. OTA bezig? Dan niets doen
+          if (id(ota_in_progress)) {
+            ESP_LOGI("ota", "OTA bezig — interval check overgeslagen");
+            return;
+          }
+
+          // 1. Wacht tot WiFi verbonden is
+          if (!id(wifi_ok)) {
+            ESP_LOGI("ota", "Wachten op WiFi...");
+            return;
+          }
+
+          // 2. Wacht tot MQTT verbonden is
+          if (!id(mqtt_ok)) {
+            ESP_LOGI("ota", "Wachten op MQTT...");
+            return;
+          }
+
+          // 3. Wacht tot latest_firmware_sensor een waarde heeft
+          if (id(latest_firmware_sensor).state.empty()) {
+            ESP_LOGI("ota", "Nog geen firmware info ontvangen...");
+            return;
+          }
+
+          // 4. Check of de firmware al up-to-date is
+          if (id(latest_firmware_sensor).state == id(firmware_version_global)) {
+            return;
+          }
+
+          // 5. Nieuwe firmware gedetecteerd → OTA starten
+          ESP_LOGI("ota", "Nieuwe firmware gedetecteerd — OTA wordt gestart!");
+          id(do_ota).execute();
+
+
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: f1_strip
+    name: "F1 LED Strip"
+    internal: false
+    pin: 13
+    num_leds: 79
+    chipset: ws2812
+    rgb_order: grb
+
+    effects:
+
+      - addressable_lambda:
+          name: startup_lightsout
+          update_interval: 50ms
+          lambda: |-
+            static int step = 0;
+            static unsigned long last_change = 0;
+            static int wait_time = 0;
+
+            if (id(startup_done)) {
+              id(f1_strip).turn_on().set_effect("f1_live").perform();
+              return;
+            }
+
+            unsigned long now = millis();
+
+            if (wait_time == 0) {
+              wait_time = 1000 + (rand() % 301);
+              last_change = now;
+            }
+
+            it.all().fade_to_black(255);
+
+            const int block_positions[5][2] = {
+              {21, 22},
+              {17, 18},
+              {13, 14},
+              {9, 10},
+              {5, 6}
+            };
+
+            if (step < 5) {
+              for (int i = 0; i <= step; i++) {
+                int s = block_positions[i][0];
+                int e = block_positions[i][1];
+                it.range(s, e) = Color(255, 0, 0);
+              }
+            }
+
+            if (now - last_change >= (unsigned long)wait_time) {
+              step++;
+              last_change = now;
+              wait_time = 1000 + (rand() % 301);
+            }
+
+            if (step == 5) {
+              it.all().fade_to_black(255);
+            }
+
+            if (step > 5) {
+                step = 0;
+                wait_time = 0;
+                id(startup_done) = true;
+
+                id(startup_active) = false;   // ⭐ Startup is nu klaar
+
+                auto on = id(f1_strip).turn_on();
+                on.set_effect("f1_live");
+                on.perform();
+            }
+
+      - addressable_lambda:
+          name: f1_live
+          update_interval: 180ms
+          lambda: |-
+            it.all().fade_to_black(255);
+
+            if (id(track_state) == "CLEAR") {
+              it.range(0, 23) = Color(0,255,0);
+            }
+            else if (id(track_state) == "YELLOW") {
+              static bool on = false;
+              on = !on;
+              it.range(0, 23) = on ? Color(255,200,0) : Color(0,0,0);
+            }
+            else if (id(track_state) == "RED") {
+              static bool on = false;
+              on = !on;
+              it.range(0, 23) = on ? Color(255,0,0) : Color(0,0,0);
+            }
+            else if (id(track_state) == "VSC") {
+              static bool toggle = false;
+              toggle = !toggle;
+              if (toggle)
+                it.range(0, 5) = Color(255,255,0);
+              else
+                it.range(18, 23) = Color(255,255,0);
+            }
+            else if (id(track_state) == "SC") {
+              static bool toggle = false;
+              toggle = !toggle;
+              if (toggle)
+                it.range(0, 5) = Color(255,180,0);
+              else
+                it.range(18, 23) = Color(255,180,0);
+            }
+
+            if (id(raceweek_state)) {
+              it.range(23, 79) = Color(255,0,0);
+            }
+
+      - addressable_lambda:
+          name: CLEAR
+          update_interval: 200ms
+          lambda: |-
+            it.range(0, 23) = Color(0,255,0);
+
+      #- addressable_lambda:
+      #    name: VSCEND
+      #    update_interval: 30ms
+      #    lambda: |-
+      #      it.range(0, 5) = Color(255,255,0);
+      #      it.range(18, 23) = Color(255,255,0);
+
+      #      const float speed = 0.005;
+      #      float t = millis() * speed;
+      #      float breath = (sin(t) + 1.0f) / 2.0f;
+      #      int g = int(255 * breath);
+
+      #      it.range(6, 17) = Color(0, g, 0);
+
+      #- addressable_lambda:
+      #    name: SCEND
+      #    update_interval: 30ms
+      #    lambda: |-
+      #      it.range(0, 5) = Color(255,180,0);
+      #      it.range(18, 23) = Color(255,180,0);
+
+      #      const float speed = 0.005;
+      #      float t = millis() * speed;
+      #      float breath = (sin(t) + 1.0f) / 2.0f;
+      #      int g = int(255 * breath);
+
+      #      it.range(6, 17) = Color(0, g, 0);
+
+      - addressable_lambda:
+          name: YELLOW
+          update_interval: 180ms
+          lambda: |-
+            static bool on = false;
+            on = !on;
+            it.range(0, 23) = on ? Color(255,200,0) : Color(0,0,0);
+
+      - addressable_lambda:
+          name: RED
+          update_interval: 180ms
+          lambda: |-
+            static bool on = false;
+            on = !on;
+            it.range(0, 23) = on ? Color(255,0,0) : Color(0,0,0);
+
+      - addressable_lambda:
+          name: VSC
+          update_interval: 180ms
+          lambda: |-
+            static bool toggle = false;
+            toggle = !toggle;
+
+            if (toggle) {
+              it.range(0, 5) = Color(255,255,0);
+              it.range(6, 23) = Color(0,0,0);
+            } else {
+              it.range(0, 17) = Color(0,0,0);
+              it.range(18, 23) = Color(255,255,0);
+            }
+
+      - addressable_lambda:
+          name: SC
+          update_interval: 180ms
+          lambda: |-
+            static bool toggle = false;
+            toggle = !toggle;
+
+            if (toggle) {
+              it.range(0, 5) = Color(255,180,0);
+              it.range(6, 23) = Color(0,0,0);
+            } else {
+              it.range(0, 17) = Color(0,0,0);
+              it.range(18, 23) = Color(255,180,0);
+            }
+
+      - addressable_lambda:
+          name: RACEWEEK
+          update_interval: 200ms
+          lambda: |-
+            it.range(23, 79) = Color(255,0,0);
+
+      - addressable_lambda:
+          name: OTA_BLUE_GLOW
+          update_interval: 30ms
+          lambda: |-
+            // Fade alles eerst weg
+            it.all().fade_to_black(40);
+
+            // Blauwe ademende glow
+            const float speed = 0.004;
+            float t = millis() * speed;
+            float breath = (sin(t) + 1.0f) / 2.0f;  // 0 → 1
+            int b = int(200 * breath);             // max 200 blauw
+
+            // Alleen de eerste 24 LEDs
+            it.range(0, 23) = Color(0, 0, b);
