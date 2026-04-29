@@ -99,7 +99,7 @@ jobs:
       - name: Generate MD5 checksum
         run: |
           cd build
-          md5sum f1-lamp-OTA.bin > f1-clock-OTA.bin.md5
+          md5sum f1-clock-OTA.bin > f1-clock-OTA.bin.md5
           echo "Generated MD5:"
           cat f1-clock-OTA.bin.md5
       
