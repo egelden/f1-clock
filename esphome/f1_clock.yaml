@@ -271,11 +271,11 @@ light:
             it.all().fade_to_black(255);
 
             const int block_positions[5][2] = {
-              {21, 22},
-              {17, 18},
-              {13, 14},
-              {9, 10},
-              {5, 6}
+              {12},
+              {9},
+              {6},
+              {3},
+              {0}
             };
 
             if (step < 5) {
