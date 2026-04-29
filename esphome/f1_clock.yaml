@@ -256,6 +256,7 @@ light:
             static unsigned long last_change = 0;
             static int wait_time = 0;
 
+            // Als startup klaar is: direct naar f1_live effect
             if (id(startup_done)) {
               id(f1_strip).turn_on().set_effect("f1_live").perform();
               return;
@@ -263,49 +264,48 @@ light:
 
             unsigned long now = millis();
 
+            // Init random wachttijd tussen 1000 en 1300 ms
             if (wait_time == 0) {
               wait_time = 1000 + (rand() % 301);
               last_change = now;
             }
 
+            // Eerst alles uitfaden
             it.all().fade_to_black(255);
 
-            const int block_positions[5][2] = {
-              {12},
-              {9},
-              {6},
-              {3},
-              {0}
-            };
+            // Posities van de 5 startlichten
+            const int block_positions[5] = {0, 3, 6, 9, 12};
 
+            // Zolang we nog in de 5 stappen zitten: steeds één extra LED aan
             if (step < 5) {
               for (int i = 0; i <= step; i++) {
-                int s = block_positions[i][0];
-                int e = block_positions[i][1];
-                it.range(s, e) = Color(255, 0, 0);
+                int idx = block_positions[i];
+                it[idx] = Color(255, 0, 0);
               }
             }
 
+            // Tijd om naar de volgende stap te gaan?
             if (now - last_change >= (unsigned long)wait_time) {
               step++;
               last_change = now;
               wait_time = 1000 + (rand() % 301);
             }
 
+            // Als alle 5 aan zijn geweest: alles uit
             if (step == 5) {
               it.all().fade_to_black(255);
             }
 
+            // Sequence klaar → reset & door naar live effect
             if (step > 5) {
-                step = 0;
-                wait_time = 0;
-                id(startup_done) = true;
+              step = 0;
+              wait_time = 0;
+              id(startup_done) = true;
+              id(startup_active) = false;
 
-                id(startup_active) = false;   // ⭐ Startup is nu klaar
-
-                auto on = id(f1_strip).turn_on();
-                on.set_effect("f1_live");
-                on.perform();
+              auto on = id(f1_strip).turn_on();
+              on.set_effect("f1_live");
+              on.perform();
             }
 
       - addressable_lambda:
