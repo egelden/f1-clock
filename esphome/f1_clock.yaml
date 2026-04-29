@@ -242,7 +242,7 @@ light:
     name: "F1 LED Strip"
     internal: false
     pin: 13
-    num_leds: 79
+    num_leds: 60
     chipset: ws2812
     rgb_order: grb
 
@@ -315,72 +315,72 @@ light:
             it.all().fade_to_black(255);
 
             if (id(track_state) == "CLEAR") {
-              it.range(0, 23) = Color(0,255,0);
+              it.range(0, 12) = Color(0,255,0);
             }
             else if (id(track_state) == "YELLOW") {
               static bool on = false;
               on = !on;
-              it.range(0, 23) = on ? Color(255,200,0) : Color(0,0,0);
+              it.range(0, 12) = on ? Color(255,200,0) : Color(0,0,0);
             }
             else if (id(track_state) == "RED") {
               static bool on = false;
               on = !on;
-              it.range(0, 23) = on ? Color(255,0,0) : Color(0,0,0);
+              it.range(0, 12) = on ? Color(255,0,0) : Color(0,0,0);
             }
             else if (id(track_state) == "VSC") {
               static bool toggle = false;
               toggle = !toggle;
               if (toggle)
-                it.range(0, 5) = Color(255,255,0);
+                it.range(0, 2) = Color(255,255,0);
               else
-                it.range(18, 23) = Color(255,255,0);
+                it.range(10, 12) = Color(255,255,0);
             }
             else if (id(track_state) == "SC") {
               static bool toggle = false;
               toggle = !toggle;
               if (toggle)
-                it.range(0, 5) = Color(255,180,0);
+                it.range(0, 2) = Color(255,180,0);
               else
-                it.range(18, 23) = Color(255,180,0);
+                it.range(10, 12) = Color(255,180,0);
             }
 
             if (id(raceweek_state)) {
-              it.range(23, 79) = Color(255,0,0);
+              it.range(13, 60) = Color(255,0,0);
             }
 
       - addressable_lambda:
           name: CLEAR
           update_interval: 200ms
           lambda: |-
-            it.range(0, 23) = Color(0,255,0);
+            it.range(0, 12) = Color(0,255,0);
 
       #- addressable_lambda:
       #    name: VSCEND
       #    update_interval: 30ms
       #    lambda: |-
-      #      it.range(0, 5) = Color(255,255,0);
-      #      it.range(18, 23) = Color(255,255,0);
+      #      it.range(0, 2) = Color(255,255,0);
+      #      it.range(10, 12) = Color(255,255,0);
 
       #      const float speed = 0.005;
       #      float t = millis() * speed;
       #      float breath = (sin(t) + 1.0f) / 2.0f;
       #      int g = int(255 * breath);
 
-      #      it.range(6, 17) = Color(0, g, 0);
+      #      it.range(3, 9) = Color(0, g, 0);
 
       #- addressable_lambda:
       #    name: SCEND
       #    update_interval: 30ms
       #    lambda: |-
-      #      it.range(0, 5) = Color(255,180,0);
-      #      it.range(18, 23) = Color(255,180,0);
+      #      it.range(0, 2) = Color(255,180,0);
+      #      it.range(10, 12) = Color(255,180,0);
 
       #      const float speed = 0.005;
       #      float t = millis() * speed;
       #      float breath = (sin(t) + 1.0f) / 2.0f;
       #      int g = int(255 * breath);
 
-      #      it.range(6, 17) = Color(0, g, 0);
+      #      it.range(3, 9) = Color(0, g, 0);
 
       - addressable_lambda:
           name: YELLOW
@@ -388,7 +388,7 @@ light:
           lambda: |-
             static bool on = false;
             on = !on;
-            it.range(0, 23) = on ? Color(255,200,0) : Color(0,0,0);
+            it.range(0, 12) = on ? Color(255,200,0) : Color(0,0,0);
 
       - addressable_lambda:
           name: RED
@@ -396,7 +396,7 @@ light:
           lambda: |-
             static bool on = false;
             on = !on;
-            it.range(0, 23) = on ? Color(255,0,0) : Color(0,0,0);
+            it.range(0, 12) = on ? Color(255,0,0) : Color(0,0,0);
 
       - addressable_lambda:
           name: VSC
@@ -406,11 +406,11 @@ light:
             toggle = !toggle;
 
             if (toggle) {
-              it.range(0, 5) = Color(255,255,0);
-              it.range(6, 23) = Color(0,0,0);
+              it.range(0, 2) = Color(255,255,0);
+              it.range(3, 12) = Color(0,0,0);
             } else {
-              it.range(0, 17) = Color(0,0,0);
-              it.range(18, 23) = Color(255,255,0);
+              it.range(0, 9) = Color(0,0,0);
+              it.range(10, 12) = Color(255,255,0);
             }
 
       - addressable_lambda:
@@ -421,18 +421,18 @@ light:
             toggle = !toggle;
 
             if (toggle) {
-              it.range(0, 5) = Color(255,180,0);
-              it.range(6, 23) = Color(0,0,0);
+              it.range(0, 2) = Color(255,180,0);
+              it.range(3, 12) = Color(0,0,0);
             } else {
-              it.range(0, 17) = Color(0,0,0);
-              it.range(18, 23) = Color(255,180,0);
+              it.range(0, 9) = Color(0,0,0);
+              it.range(10, 12) = Color(255,180,0);
             }
 
       - addressable_lambda:
           name: RACEWEEK
           update_interval: 200ms
           lambda: |-
-            it.range(23, 79) = Color(255,0,0);
+            it.range(13, 60) = Color(255,0,0);
 
       - addressable_lambda:
           name: OTA_BLUE_GLOW
@@ -448,4 +448,4 @@ light:
             int b = int(200 * breath);             // max 200 blauw
 
             // Alleen de eerste 24 LEDs
-            it.range(0, 23) = Color(0, 0, b);
+            it.range(0, 12) = Color(0, 0, b);
