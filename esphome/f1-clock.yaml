@@ -89,13 +89,13 @@ mqtt:
                 id(f1_strip).turn_on().set_effect("f1_live").perform();
             }
 
-    - topic: f1/firmware/latest
+    - topic: f1/firmware/latest-clock
       qos: 0
       then:
         - lambda: |-
-            id(latest_firmware_sensor_clock).publish_state(x.c_str());
+            id(latest_firmware_sensor).publish_state(x.c_str());
 
-    - topic: f1/firmware/url
+    - topic: f1/firmware/url-clock
       qos: 0
       then:
         - lambda: |-
