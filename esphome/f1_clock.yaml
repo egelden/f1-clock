@@ -315,44 +315,44 @@ light:
             it.all().fade_to_black(255);
 
             if (id(track_state) == "CLEAR") {
-              it.range(13, 59) = Color(0,255,0);
+              it.range(13, 60) = Color(0,255,0);
             }
             else if (id(track_state) == "YELLOW") {
               static bool on = false;
               on = !on;
-              it.range(13, 59) = on ? Color(255,200,0) : Color(0,0,0);
+              it.range(13, 60) = on ? Color(255,200,0) : Color(0,0,0);
             }
             else if (id(track_state) == "RED") {
               static bool on = false;
               on = !on;
-              it.range(0, 12) = on ? Color(255,0,0) : Color(0,0,0);
+              it.range(13, 60) = on ? Color(255,0,0) : Color(0,0,0);
             }
             else if (id(track_state) == "VSC") {
               static bool toggle = false;
               toggle = !toggle;
               if (toggle)
-                it.range(20, 28) = Color(255,255,0);
+                it.range(20, 29) = Color(255,255,0);
               else
-                it.range(43, 51) = Color(255,255,0);
+                it.range(44, 53) = Color(255,255,0);
             }
             else if (id(track_state) == "SC") {
               static bool toggle = false;
               toggle = !toggle;
               if (toggle)
-                it.range(20, 28) = Color(255,180,0);
+                it.range(20, 29) = Color(255,180,0);
               else
-                it.range(43, 57) = Color(255,180,0);
+                it.range(44, 53) = Color(255,180,0);
             }
 
             if (id(raceweek_state)) {
-              it.range(0, 12) = Color(255,0,0);
+              it.range(0, 13) = Color(255,0,0);
             }
 
       - addressable_lambda:
           name: CLEAR
           update_interval: 200ms
           lambda: |-
-            it.range(13, 59) = Color(0,255,0);
+            it.range(13, 60) = Color(0,255,0);
 
       #- addressable_lambda:
       #    name: VSCEND
@@ -388,7 +388,7 @@ light:
           lambda: |-
             static bool on = false;
             on = !on;
-            it.range(13, 59) = on ? Color(255,200,0) : Color(0,0,0);
+            it.range(13, 60) = on ? Color(255,200,0) : Color(0,0,0);
 
       - addressable_lambda:
           name: RED
@@ -396,7 +396,7 @@ light:
           lambda: |-
             static bool on = false;
             on = !on;
-            it.range(13, 59) = on ? Color(255,0,0) : Color(0,0,0);
+            it.range(13, 60) = on ? Color(255,0,0) : Color(0,0,0);
 
       - addressable_lambda:
           name: VSC
@@ -407,12 +407,12 @@ light:
 
             if (toggle) {
               it.range(13, 19) = Color(0,0,0);
-              it.range(20, 28) = Color(255,255,0);
-              it.range(29, 59) = Color(0,0,0);
+              it.range(20, 29) = Color(255,255,0);
+              it.range(30, 60) = Color(0,0,0);
             } else {
-              it.range(13, 42) = Color(0,0,0);
-              it.range(43, 51) = Color(255,255,0);
-              it.range(52, 59) = Color(0,0,0);
+              it.range(13, 43) = Color(0,0,0);
+              it.range(44, 53) = Color(255,255,0);
+              it.range(54, 60) = Color(0,0,0);
             }
 
       - addressable_lambda:
@@ -424,12 +424,12 @@ light:
 
             if (toggle) {
               it.range(13, 19) = Color(0,0,0);
-              it.range(20, 28) = Color(255,180,0);
-              it.range(29, 59) = Color(0,0,0);
+              it.range(20, 29) = Color(255,180,0);
+              it.range(30, 60) = Color(0,0,0);
             } else {
-              it.range(13, 42) = Color(0,0,0);
-              it.range(43, 51) = Color(255,180,0);
-              it.range(52, 59) = Color(0,0,0);
+              it.range(13, 43) = Color(0,0,0);
+              it.range(44, 53) = Color(255,180,0);
+              it.range(54, 60) = Color(0,0,0);
             }
 
       - addressable_lambda:
@@ -452,4 +452,4 @@ light:
             int b = int(200 * breath);             // max 200 blauw
 
             // Alleen de eerste 24 LEDs
-            it.range(13, 59) = Color(0, 0, b);
+            it.range(13, 60) = Color(0, 0, b);
