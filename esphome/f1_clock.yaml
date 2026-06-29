@@ -71,11 +71,22 @@ mqtt:
             id(track_state) = x.c_str();
             std::transform(id(track_state).begin(), id(track_state).end(), id(track_state).begin(), ::toupper);
 
-            // Forceer terug naar f1_live, behalve tijdens OTA
+            // Markeer dat we nu een echte track status hebben ontvangen
+            if (id(track_state) != "UNAVAILABLE") {
+                id(track_state_initialized) = true;
+            }
+
+            // Fallback alleen als we nog NOOIT een echte status hebben gehad
+            if (!id(track_state_initialized) && id(session_state) == "LIVE") {
+                id(f1_strip).turn_on().set_effect("CLEAR").perform();
+                return;
+            }
+
+            // Normale logica
             if (!id(ota_in_progress) && !id(startup_active)) {
                 id(f1_strip).turn_on().set_effect("f1_live").perform();
             }
-
+            
     - topic: f1/f1_race_week/state
       qos: 0
       then:
@@ -101,6 +112,20 @@ mqtt:
         - lambda: |-
             id(firmware_url) = x.c_str();
             ESP_LOGI("ota", "Firmware URL updated to: %s", id(firmware_url).c_str());
+    
+    - topic: f1/f1_session_status/state
+      qos: 0
+      then:
+        - lambda: |-
+            id(session_state) = x.c_str();
+            std::transform(id(session_state).begin(), id(session_state).end(), id(session_state).begin(), ::toupper);
+
+            // Als track_state nog UNAVAILABLE is maar sessie is LIVE → CLEAR tonen
+            if (id(track_state) == "UNAVAILABLE" && id(session_state) == "LIVE") {
+                if (!id(ota_in_progress) && !id(startup_active)) {
+                    id(f1_strip).turn_on().set_effect("CLEAR").perform();
+                }
+            }
 
 
 globals:
@@ -145,6 +170,24 @@ globals:
     type: bool
     restore_value: no
     initial_value: "true"
+
+  - id: session_state
+    type: std::string
+    initial_value: '"UNAVAILABLE"'
+    restore_value: false
+
+  - id: track_state_initialized
+    type: bool
+    initial_value: "false"
+    restore_value: false
+
+# ⭐ NIEUWE TOGGLE
+switch:
+  - platform: template
+    name: "Raceweek LEDs"
+    id: raceweek_enabled
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
 
 text_sensor:
   - platform: template
