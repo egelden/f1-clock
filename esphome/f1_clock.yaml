@@ -35,6 +35,13 @@ wifi:
     then:
       - lambda: |-
           id(wifi_ok) = true;
+          id(demo_active) = false;   // Stop demo mode
+
+  on_disconnect:
+    then:
+      - lambda: |-
+          id(wifi_ok) = false;
+          id(demo_active) = true;    // Start demo mode
 
 captive_portal:
 
@@ -71,18 +78,15 @@ mqtt:
             id(track_state) = x.c_str();
             std::transform(id(track_state).begin(), id(track_state).end(), id(track_state).begin(), ::toupper);
 
-            // Markeer dat we nu een echte track status hebben ontvangen
             if (id(track_state) != "UNAVAILABLE") {
                 id(track_state_initialized) = true;
             }
 
-            // Fallback alleen als we nog NOOIT een echte status hebben gehad
             if (!id(track_state_initialized) && id(session_state) == "LIVE") {
                 id(f1_strip).turn_on().set_effect("CLEAR").perform();
                 return;
             }
 
-            // Normale logica
             if (!id(ota_in_progress) && !id(startup_active)) {
                 id(f1_strip).turn_on().set_effect("f1_live").perform();
             }
@@ -95,7 +99,6 @@ mqtt:
             std::transform(s.begin(), s.end(), s.begin(), ::toupper);
             id(raceweek_state) = (s == "ON");
 
-            // Forceer terug naar f1_live, behalve tijdens OTA
             if (!id(ota_in_progress) && !id(startup_active)) {
                 id(f1_strip).turn_on().set_effect("f1_live").perform();
             }
@@ -120,7 +123,6 @@ mqtt:
             id(session_state) = x.c_str();
             std::transform(id(session_state).begin(), id(session_state).end(), id(session_state).begin(), ::toupper);
 
-            // Als track_state nog UNAVAILABLE is maar sessie is LIVE → CLEAR tonen
             if (id(track_state) == "UNAVAILABLE" && id(session_state) == "LIVE") {
                 if (!id(ota_in_progress) && !id(startup_active)) {
                     id(f1_strip).turn_on().set_effect("CLEAR").perform();
@@ -181,13 +183,19 @@ globals:
     initial_value: "false"
     restore_value: false
 
-# ⭐ NIEUWE TOGGLE
+  - id: demo_active
+    type: bool
+    initial_value: "true"
+    restore_value: false
+
+
 switch:
   - platform: template
     name: "Raceweek LEDs"
     id: raceweek_enabled
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+
 
 text_sensor:
   - platform: template
@@ -204,6 +212,7 @@ text_sensor:
     icon: "mdi:update"
     update_interval: 5s
 
+
 binary_sensor:
   - platform: template
     name: "Firmware Update Available"
@@ -213,6 +222,7 @@ binary_sensor:
       if (id(latest_firmware_sensor).state.empty()) return false;
       return id(latest_firmware_sensor).state != id(firmware_version_global);
       
+
 script:
   - id: try_startup
     mode: queued
@@ -223,60 +233,72 @@ script:
       - light.turn_on:
           id: f1_strip
           effect: startup_lightsout
+
   - id: do_ota
     then:
       - lambda: |-
-          id(ota_in_progress) = true;   // ⭐ Eerst OTA-flag zetten
+          id(ota_in_progress) = true;
 
-      - light.turn_on:                  
+      - light.turn_on:
           id: f1_strip
           effect: "OTA_BLUE_GLOW"
       
-      - delay: 4s                       
-      
+      - delay: 4s
       - logger.log: "OTA gestart via HTTP..."
 
       - ota.http_request.flash:
           url: "https://raw.githubusercontent.com/egelden/f1-clock/main/build/f1-clock-OTA.bin"
           md5_url: "https://raw.githubusercontent.com/egelden/f1-clock/main/build/f1-clock-OTA.bin.md5"
 
+
 interval:
   - interval: 10s
     then:
       - lambda: |-
-          // 0. OTA bezig? Dan niets doen
-          if (id(ota_in_progress)) {
-            ESP_LOGI("ota", "OTA bezig — interval check overgeslagen");
-            return;
-          }
+          if (id(ota_in_progress)) return;
+          if (!id(wifi_ok)) return;
+          if (!id(mqtt_ok)) return;
+          if (id(latest_firmware_sensor).state.empty()) return;
+          if (id(latest_firmware_sensor).state == id(firmware_version_global)) return;
 
-          // 1. Wacht tot WiFi verbonden is
-          if (!id(wifi_ok)) {
-            ESP_LOGI("ota", "Wachten op WiFi...");
-            return;
-          }
-
-          // 2. Wacht tot MQTT verbonden is
-          if (!id(mqtt_ok)) {
-            ESP_LOGI("ota", "Wachten op MQTT...");
-            return;
-          }
-
-          // 3. Wacht tot latest_firmware_sensor een waarde heeft
-          if (id(latest_firmware_sensor).state.empty()) {
-            ESP_LOGI("ota", "Nog geen firmware info ontvangen...");
-            return;
-          }
-
-          // 4. Check of de firmware al up-to-date is
-          if (id(latest_firmware_sensor).state == id(firmware_version_global)) {
-            return;
-          }
-
-          // 5. Nieuwe firmware gedetecteerd → OTA starten
           ESP_LOGI("ota", "Nieuwe firmware gedetecteerd — OTA wordt gestart!");
           id(do_ota).execute();
 
+  - interval: 1s
+    then:
+      - lambda: |-
+          if (!id(demo_active)) return;
+
+          static int step = 0;
+          static int timer = 0;
+
+          timer++;
+
+          if (timer % 6 == 0) {
+            id(raceweek_state) = !id(raceweek_state);
+          }
+
+          if (step == 0 && timer >= 10) { step = 1; timer = 0; }
+          if (step == 1 && timer >= 2)  { step = 2; timer = 0; }
+          if (step == 2 && timer >= 10) { step = 3; timer = 0; }
+          if (step == 3 && timer >= 2)  { step = 4; timer = 0; }
+          if (step == 4 && timer >= 10) { step = 5; timer = 0; }
+          if (step == 5 && timer >= 2)  { step = 6; timer = 0; }
+          if (step == 6 && timer >= 10) { step = 7; timer = 0; }
+          if (step == 7 && timer >= 2)  { step = 8; timer = 0; }
+          if (step == 8 && timer >= 10) { step = 9; timer = 0; }
+          if (step == 9 && timer >= 2)  { step = 0; timer = 0; }
+
+          if (step == 0)  id(f1_strip).turn_on().set_effect("CLEAR").perform();
+          if (step == 1)  id(f1_strip).turn_on().set_effect("BLACK").perform();
+          if (step == 2)  id(f1_strip).turn_on().set_effect("YELLOW").perform();
+          if (step == 3)  id(f1_strip).turn_on().set_effect("BLACK").perform();
+          if (step == 4)  id(f1_strip).turn_on().set_effect("RED").perform();
+          if (step == 5)  id(f1_strip).turn_on().set_effect("BLACK").perform();
+          if (step == 6)  id(f1_strip).turn_on().set_effect("VSC").perform();
+          if (step == 7)  id(f1_strip).turn_on().set_effect("BLACK").perform();
+          if (step == 8)  id(f1_strip).turn_on().set_effect("SC").perform();
+          if (step == 9)  id(f1_strip).turn_on().set_effect("BLACK").perform();
 
 
 light:
@@ -292,6 +314,12 @@ light:
     effects:
 
       - addressable_lambda:
+          name: BLACK
+          update_interval: 200ms
+          lambda: |-
+            it.all() = Color(0,0,0);
+
+      - addressable_lambda:
           name: startup_lightsout
           update_interval: 50ms
           lambda: |-
@@ -299,7 +327,6 @@ light:
             static unsigned long last_change = 0;
             static int wait_time = 0;
 
-            // Als startup klaar is: direct naar f1_live effect
             if (id(startup_done)) {
               id(f1_strip).turn_on().set_effect("f1_live").perform();
               return;
@@ -307,19 +334,15 @@ light:
 
             unsigned long now = millis();
 
-            // Init random wachttijd tussen 1000 en 1300 ms
             if (wait_time == 0) {
               wait_time = 1000 + (rand() % 301);
               last_change = now;
             }
 
-            // Eerst alles uitfaden
             it.all().fade_to_black(255);
 
-            // Posities van de 5 startlichten
             const int block_positions[5] = {0, 3, 6, 9, 12};
 
-            // Zolang we nog in de 5 stappen zitten: steeds één extra LED aan
             if (step < 5) {
               for (int i = 0; i <= step; i++) {
                 int idx = block_positions[i];
@@ -327,19 +350,16 @@ light:
               }
             }
 
-            // Tijd om naar de volgende stap te gaan?
             if (now - last_change >= (unsigned long)wait_time) {
               step++;
               last_change = now;
               wait_time = 1000 + (rand() % 301);
             }
 
-            // Als alle 5 aan zijn geweest: alles uit
             if (step == 5) {
               it.all().fade_to_black(255);
             }
 
-            // Sequence klaar → reset & door naar live effect
             if (step > 5) {
               step = 0;
               wait_time = 0;
@@ -396,34 +416,6 @@ light:
           update_interval: 200ms
           lambda: |-
             it.range(13, 60) = Color(0,255,0);
-
-      #- addressable_lambda:
-      #    name: VSCEND
-      #    update_interval: 30ms
-      #    lambda: |-
-      #      it.range(0, 2) = Color(255,255,0);
-      #      it.range(10, 12) = Color(255,255,0);
-
-      #      const float speed = 0.005;
-      #      float t = millis() * speed;
-      #      float breath = (sin(t) + 1.0f) / 2.0f;
-      #      int g = int(255 * breath);
-
-      #      it.range(3, 9) = Color(0, g, 0);
-
-      #- addressable_lambda:
-      #    name: SCEND
-      #    update_interval: 30ms
-      #    lambda: |-
-      #      it.range(0, 2) = Color(255,180,0);
-      #      it.range(10, 12) = Color(255,180,0);
-
-      #      const float speed = 0.005;
-      #      float t = millis() * speed;
-      #      float breath = (sin(t) + 1.0f) / 2.0f;
-      #      int g = int(255 * breath);
-
-      #      it.range(3, 9) = Color(0, g, 0);
 
       - addressable_lambda:
           name: YELLOW
@@ -485,14 +477,11 @@ light:
           name: OTA_BLUE_GLOW
           update_interval: 30ms
           lambda: |-
-            // Fade alles eerst weg
             it.all().fade_to_black(40);
 
-            // Blauwe ademende glow
             const float speed = 0.004;
             float t = millis() * speed;
-            float breath = (sin(t) + 1.0f) / 2.0f;  // 0 → 1
-            int b = int(200 * breath);             // max 200 blauw
+            float breath = (sin(t) + 1.0f) / 2.0f;
+            int b = int(200 * breath);
 
-            // Alleen de eerste 24 LEDs
             it.range(13, 60) = Color(0, 0, b);
